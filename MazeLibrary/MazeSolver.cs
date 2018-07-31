@@ -7,11 +7,14 @@ namespace MazeLibrary
     {
 
         public int[,] MazeModel { get; private set; }
-        public int StartX { get; private set; }
-        public int StartY { get; private set; }
 
-        List<Point> badPoints = new List<Point>();
-        public List<Point> Route { get; private set; }
+
+        private List<List<Point>> routes = new List<List<Point>>();
+        //adding the borders for finding end  of route
+        private int[,] updateArray;
+        private int startX;
+        private int startY;
+
 
         public MazeSolver(int[,] mazeModel, int startX, int startY)
         {
@@ -32,202 +35,169 @@ namespace MazeLibrary
             }
 
             this.MazeModel = mazeModel;
-            this.StartX = startX;
-            this.StartY = startY;
-
-            ///throw new NotImplementedException();
+            this.startX = startX;
+            this.startY = startY;
         }
 
         public int[,] MazeWithPass()
         {
-            int lengthX = this.MazeModel.GetUpperBound(0) + 1;
-            int lengthY = this.MazeModel.GetUpperBound(1) + 1;
+            int length = routes[0].Count;
+            List<Point> shortestRoute = routes[0];
 
-            for (int i = 0; i < lengthX; i++)
+            for (int i = 1; i < routes.Count; i++)
             {
-                for (int j = 0; j < lengthY; j++)
+                if (routes[i].Count < length)
                 {
-                    if (Route.Contains(new Point(i, j)))
-                    {
-                        int step = Route.IndexOf(new Point(i, j)) + 1;
-                        MazeModel[i, j] = step;
-                    }
+                    length = routes[i].Count;
+                    shortestRoute = routes[i];
                 }
+            }
+
+            for (int i = 0; i < shortestRoute.Count; i++)
+            {
+                MazeModel[shortestRoute[i].X - 1, shortestRoute[i].Y - 1] = i + 1;
             }
             return MazeModel;
         }
 
         public void PassMaze()
         {
-            int lengthX = this.MazeModel.GetUpperBound(0) + 1;
-            int lengthY = this.MazeModel.GetUpperBound(1) + 1;
-
-
-            Point point = new Point(this.StartX, this.StartY);
-            Route = new List<Point>();
-            Route.Add(point);
-
-            for (int i = point.X; i < lengthX;)
+            int length = (int)Math.Sqrt(MazeModel.Length);
+            updateArray = new int[length + 2, length + 2];
+            for (int i = 0; i < length + 2; i++)
             {
-                for (int j = point.Y; j < lengthY;)
+                for (int j = 0; j < length + 2; j++)
                 {
-                    Point newPoint = GetNewPoint(point);
-                    Point lastPoint = new Point((Route[Route.Count - 1].X), (Route[Route.Count - 1].Y));
-
-                    if (newPoint == null)
+                    if (i == 0
+                        || j == 0
+                        || i == length + 1
+                        || j == length + 1)
                     {
-                        for (int l = 0; l < badPoints.Count; l++)
-                        {
-                            Route.Add(badPoints[l]);
-                        }
-                        break;
-                    }
-
-                    if (!CheckBadPoint(newPoint))
-                    {
-                        Route.Add(newPoint);
-                        point = newPoint;
+                        updateArray[i, j] = -2;
                     }
                     else
                     {
-                        int lenRoute = Route.Count - 1;
-                        for (int k = lenRoute; k > 0; k--)
-                        {
-                            if (Route[k].Flag == false)
-                            {
-                                badPoints.Add(newPoint);
-                                newPoint = Route[Route.Count - 1];
-                                Route.RemoveAt(Route.Count - 1);
-                            }
-                            else
-                            {
-                                point = newPoint;
-                                break;
-                            }
-                        }
-
+                        updateArray[i, j] = MazeModel[i - 1, j - 1];
                     }
-
-
-                }
-            }
-        }
-
-        private bool CheckBadPoint(Point point)
-        {
-            for (int i = 0; i < badPoints.Count; i++)
-            {
-
-                if (point.X == badPoints[i].X && point.Y == badPoints[i].Y)
-                {
-                    return true;
                 }
             }
 
-            return false;
+            updateArray[startX + 1, startY + 2] = -10;
+            Point point = new Point(startX + 1, startY + 1, 0);
+            List<Point> route = new List<Point>();
+            route.Add(point);
+            routes.Add(route);
+
+            StartFindRoute(point);
+
         }
 
-        private Point GetNewPoint(Point point)
+        private void StartFindRoute(Point point)
         {
-            int lengthX = this.MazeModel.GetUpperBound(0);
-            int lengthY = this.MazeModel.GetUpperBound(1);
-
             List<Point> neighbors = new List<Point>();
-            if (point.X + 1 < lengthX)
-            {
-                Point newPoint = new Point(point.X + 1, point.Y);
-                int firstNumber = MazeModel[point.X, point.Y];
-                int secondNumber = MazeModel[newPoint.X, newPoint.Y];
 
-                if (Compare(firstNumber, secondNumber) == 0)
+            for (int i = point.X - 1; i <= point.X + 1; i++)
+            {
+                for (int j = 0; j <= point.Y + 1; j++)
                 {
-                    if (!CheckBadPoint(newPoint))
+                    Point newPoint = new Point(i, j, updateArray[i, j]);
+                    double length = CalculateLentghBetweenPoints(point, newPoint);
+
+                    if (length == 1 && newPoint.Number == 0)
                     {
-                        neighbors.Add(newPoint);
+
+                        if (CheckListOfPoint(point) != -1)
+                        {
+
+                            neighbors.Add(newPoint);
+                        }
+                    }
+
+                    if (newPoint.Number == -2 && length == 1)
+                    {
+                        return; //find the end of labirint
                     }
                 }
             }
+            SplitLists(point, neighbors);
+        }
 
-            if (point.Y + 1 < lengthY)
+        private void SplitLists(Point point, List<Point> neighbors)
+        {
+            int containIndexOfList = CheckListOfPoint(point);
+            for (int i = 0; i < neighbors.Count; i++)
             {
-                Point newPoint = new Point(point.X, point.Y + 1);
-                int firstNumber = MazeModel[point.X, point.Y];
-                int secondNumber = MazeModel[newPoint.X, newPoint.Y];
-
-                if (Compare(firstNumber, secondNumber) == 0)
+                int index = CheckListOfPoint(neighbors[i]);
+                if (index != -1)
                 {
-                    if (!CheckBadPoint(newPoint))
-                    {
-                        neighbors.Add(newPoint);
-                    }
+                    neighbors.RemoveAt(i);
                 }
             }
 
-            if (point.Y - 1 < lengthY)
+            if(neighbors.Count == 0)
             {
-                Point newPoint = new Point(point.X, point.Y - 1);
-                int firstNumber = MazeModel[point.X, point.Y];
+                routes.RemoveAt(containIndexOfList);
+                return;
+            }
 
-                int secondNumber = MazeModel[newPoint.X, newPoint.Y];
-
-                if (Compare(firstNumber, secondNumber) == 0)
+            if (neighbors.Count == 1)
+            {
+                routes[containIndexOfList].Add(neighbors[0]);
+                StartFindRoute(neighbors[0]);
+            }
+            else
+            {
+                for(int i = 0; i < neighbors.Count; i++)
                 {
-                    if (!CheckBadPoint(newPoint))
+                    List<Point> copyRoute = new List<Point>(routes[containIndexOfList]);
+                    copyRoute.Add(neighbors[i]);
+                    routes.Add(copyRoute);
+                }
+                routes.RemoveAt(containIndexOfList);
+                for (int i = 0; i < neighbors.Count; i++)
+                {
+                    StartFindRoute(neighbors[i]);
+                }
+            }
+        }
+
+        private int CheckListOfPoint(Point point)
+        {
+            for (int i = 0; i < routes.Count; i++)
+            {
+                for (int j = 0; j < routes[i].Count; j++)
+                {
+                    if (point.X == routes[i][j].X && point.Y == routes[i][j].Y)
                     {
-                        neighbors.Add(newPoint);
+                        return i;
                     }
                 }
             }
+            return -1;
+        }
 
-            if (point.X - 1 < lengthX)
-            {
-                Point newPoint = new Point(point.X - 1, point.Y);
-                int firstNumber = MazeModel[point.X, point.Y];
-                int secondNumber = MazeModel[newPoint.X, newPoint.Y];
+        private double CalculateLentghBetweenPoints(Point lhs, Point rhs)
+        {
+            int x = lhs.X - rhs.X;
+            int y = lhs.Y - rhs.Y;
 
-                if (Compare(firstNumber, secondNumber) == 0)
-                {
-                    if (!CheckBadPoint(newPoint))
-                    {
-                        neighbors.Add(newPoint);
-                    }
-                }
-            }
-
-            Point neighbor = null;
-            if (neighbors.Count == 0)
-            {
-                neighbor = null;
-            }
-
-            if (neighbors.Count >= 1)
-            {
-                neighbor = neighbors[0];
-                point.Flag = false;
-            }
-
-            return neighbor;
+            return Math.Sqrt(x * x + y * y);
         }
 
         public class Point
         {
-            public bool Flag { get; set; }
+            public bool Contains { get; set; }
             public int X { get; set; }
             public int Y { get; set; }
+            public int Number { get; set; }
 
-            public Point(int x, int y)
+            public Point(int x, int y, int number)
             {
                 this.X = x;
                 this.Y = y;
-                this.Flag = false;
+                this.Contains = false;
+                this.Number = number;
             }
-        }
-
-
-
-        private int Compare(int first, int second)
-        {
-            return first - second;
         }
     }
 }
